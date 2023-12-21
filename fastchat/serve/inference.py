@@ -183,19 +183,19 @@ def generate_stream(
             last_token_logits = last_token_logits.float().to("cpu")
 
         if temperature < 1e-5 or top_p < 1e-8:  # greedy
-            _, indices = torch.topk(last_token_logits, 2)
+            _, indices = torch.topk(last_token_logits, 5)
             tokens = [int(index) for index in indices.tolist()]
         else:
             probs = torch.softmax(last_token_logits, dim=-1)
             indices = torch.multinomial(probs, num_samples=2)
             tokens = [int(token) for token in indices.tolist()]
         token = tokens[0]
-        output_ids.append(token)
         if logprobs is not None:
             # Cannot use last_token_logits because logprobs is based on raw logits.
-            token_logprobs.append(
-                torch.log_softmax(logits[0, -1, :], dim=-1)[token].tolist()
-            )
+            for t in tokens:
+                token_logprobs.append(
+                    torch.log_softmax(logits[0, -1, :], dim=-1)[t].tolist()
+                )
 
         if token in stop_token_ids:
             stopped = True
@@ -227,11 +227,15 @@ def generate_stream(
                             output_ids if echo else output_ids[input_echo_len:]
                         )
                     ],
-                    "token_logprobs": token_logprobs
+                    "token_logprobs": token_logprobs[
+                        input_echo_len : input_echo_len + 1
+                    ]
                     if echo
-                    else token_logprobs[input_echo_len:],
-                    "top_logprobs": [{}]
-                    * len(token_logprobs if echo else token_logprobs[input_echo_len:]),
+                    else token_logprobs[input_echo_len : input_echo_len + 1],
+                    "top Logprobs": [
+                        {"token": tokenizer.decode(t), "logprob": p}
+                        for t, p in zip(tokens, token_logprobs[input_echo_len:])
+                    ],
                 }
                 # Compute text_offset
                 curr_pos = 0
